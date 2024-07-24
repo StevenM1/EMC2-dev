@@ -22,7 +22,6 @@ make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
   events$factor <- events$trial_type
   events$modulation <- 1
   events$regressor <- events$trial_type
-  out <- data.frame
   for(fact in names(factors)){
     idx <- events$trial_type %in% factors[[fact]]
     events$factor[idx] <- fact

@@ -291,6 +291,11 @@ sampled_p_vector <- function(design,model=NULL,doMap=TRUE, add_da = FALSE, all_c
   if(!is.null(design$Ffactors)){
     design <- list(design)
   }
+  if(!is.null(attr(design, "p_vector"))){
+    p_vector <- numeric(length(attr(design, "p_vector")))
+    names(p_vector) <- attr(design, "p_vector")
+    return(p_vector)
+  }
   out <- c()
   map_list <- list()
   for(j in 1:length(design)){
