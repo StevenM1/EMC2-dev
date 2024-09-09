@@ -103,10 +103,13 @@ run_emc <- function(emc, stage, stop_criteria,
       p_accept_in <- pmax(0.4, p_accept - progress$gds_bad*.3)
       particle_factor_in[!progress$gds_bad] <- particle_factor
     }
-    emc <- auto_mclapply(emc,run_stages, stage = stage, iter= progress$step_size,
+    sub_emc <- subset(emc, filter = max(chain_n(emc) - 1), stage = stage)
+    sub_emc <- auto_mclapply(sub_emc,run_stages, stage = stage, iter= progress$step_size,
                               verbose=verbose,  verboseProgress = verboseProgress,
                               particles=particles,particle_factor=particle_factor_in,
                               p_accept=p_accept_in, n_cores=cores_per_chain, mc.cores = cores_for_chains)
+    emc <- concat_emc(emc, sub_emc)
+    rm(sub_emc)
     for(i in 2:length(emc)){ # Frees up memory, courtesy of Steven
       emc[[i]]$data <- emc[[1]]$data
     }
