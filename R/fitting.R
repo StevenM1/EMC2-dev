@@ -208,7 +208,7 @@ check_progress <- function (emc, stage, iter, stop_criteria,
   }
   gd <- check_gd(emc, stage, stop_criteria[["max_gd"]], stop_criteria[["mean_gd"]], trys, verbose,
                  iter = total_iters_stage, selection, omit_mpsrf = stop_criteria[["omit_mpsrf"]],
-                 n_blocks)
+                 n_blocks, n_cores)
   iter_done <- ifelse(is.null(iter) || length(iter) == 0, TRUE, total_iters_stage >= iter)
   if (min_es == 0) {
     es_done <- TRUE
@@ -260,13 +260,13 @@ check_progress <- function (emc, stage, iter, stop_criteria,
 }
 
 check_gd <- function(emc, stage, max_gd, mean_gd, omit_mpsrf, trys, verbose,
-                     selection, iter, n_blocks = 1)
+                     selection, iter, n_blocks = 1, n_cores = 1)
 {
-  get_gds <- function(emc,omit_mpsrf, selection, stage) {
+  get_gds <- function(emc,omit_mpsrf, selection, stage, n_cores) {
     gd_out <- c()
     for(select in selection){
       gd <- unlist(gd_summary.emc(emc, selection = select, stage = stage,
-                                  omit_mpsrf = omit_mpsrf, stat = NULL))
+                                  omit_mpsrf = omit_mpsrf, stat = NULL, n_cores = n_cores))
       gd_out <- c(gd_out, c(gd))
     }
     gd_out[is.na(gd_out)] <- Inf
@@ -277,7 +277,7 @@ check_gd <- function(emc, stage, max_gd, mean_gd, omit_mpsrf, trys, verbose,
   if(!emc[[1]]$init | !stage %in% emc[[1]]$samples$stage)
     return(list(gd_done = FALSE, emc = emc))
   if(is.null(omit_mpsrf)) omit_mpsrf <- TRUE
-  gd <- get_gds(emc,omit_mpsrf,selection, stage)
+  gd <- get_gds(emc,omit_mpsrf,selection, stage, n_cores)
   if(!is.null(max_gd)){
     ok_max_gd <- ifelse(all(is.finite(gd)), all(gd < max_gd), FALSE)
   } else{
@@ -296,7 +296,7 @@ check_gd <- function(emc, stage, max_gd, mean_gd, omit_mpsrf, trys, verbose,
     if (is(samplers_short,"try-error")){
       gd_short <- Inf
     } else{
-      gd_short <- get_gds(samplers_short,omit_mpsrf,selection, stage)
+      gd_short <- get_gds(samplers_short,omit_mpsrf,selection, stage, n_cores)
 
     }
     if (is.null(max_gd) & (mean(gd_short) < mean(gd)) | (!is.null(max_gd) & (max(gd_short) < max(gd)))) {

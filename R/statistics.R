@@ -468,24 +468,31 @@ get_summary_stat <- function(emc, selection = "mu", fun, stat = NULL,
   if(length(dots$subject) == 1 || emc[[1]]$n_subjects == 1) dots$by_subject <- TRUE
   MCMC_samples <- do.call(get_pars, c(list(emc = emc, selection = selection), fix_dots(dots, get_pars)))
   out <- vector("list", length = length(MCMC_samples))
-  for(i in 1:length(MCMC_samples)){
-    # cat("\n", names(MCMC_samples)[[i]], "\n")
-    if(length(fun) > 1){
-      outputs <- list()
-      for(j in 1:length(fun)){
-        outputs[[j]] <- do.call(fun[[j]], c(list(MCMC_samples[[i]]), fix_dots(dots, fun[[j]])))
+  # Potential parallelization mostly for gd checking
+  dots <- add_defaults(dots, n_cores = 1)
+  if(dots$n_cores > 1 & length(MCMC_samples) > 1 & length(fun) == 1){
+    out <- mclapply(MCMC_samples, FUN = function(x) do.call(fun, c(list(x), fix_dots(dots, fun))), mc.cores = dots$n_cores)
+  } else{
+    for(i in 1:length(MCMC_samples)){
+      # cat("\n", names(MCMC_samples)[[i]], "\n")
+      if(length(fun) > 1){
+        outputs <- list()
+        for(j in 1:length(fun)){
+          outputs[[j]] <- do.call(fun[[j]], c(list(MCMC_samples[[i]]), fix_dots(dots, fun[[j]])))
+        }
+        out[[i]] <- do.call(cbind, outputs)
+        if(!is.null(stat_name)){
+          if(ncol(out[[i]]) != length(stat_name)) stop("make sure stat_name is the same length as function output")
+          colnames(out[[i]]) <- stat_name
+        }
+      } else{
+        out[[i]] <- do.call(fun, c(list(MCMC_samples[[i]]), fix_dots(dots, fun)))
       }
-      out[[i]] <- do.call(cbind, outputs)
-      if(!is.null(stat_name)){
-        if(ncol(out[[i]]) != length(stat_name)) stop("make sure stat_name is the same length as function output")
-        colnames(out[[i]]) <- stat_name
-      }
-    } else{
-      out[[i]] <- do.call(fun, c(list(MCMC_samples[[i]]), fix_dots(dots, fun)))#fun(MCMC_samples[[i]], ...)
     }
   }
+
   names(out) <- names(MCMC_samples)
-  if(length(fun) == 1 & !is.matrix(out[[i]]) & !is.null(stat)){
+  if(length(fun) == 1 & !is.matrix(out[[1]]) & !is.null(stat)){
     out <- make_nice_summary(out, stat, stat_only, stat_name)
     out <- round(out, digits)
   } else{
