@@ -977,9 +977,13 @@ run_IS2 <- function(emc, stage = "sample", filter = 0, IS_samples = 1000,
 
 auto_mclapply <- function(X, FUN, mc.cores, ...){
   if(Sys.info()[1] == "Windows"){
-    cluster <- parallel::makeCluster(mc.cores)
-    list_out <- parallel::parLapply(cl = cluster, X,FUN, ...)
-    parallel::stopCluster(cluster)
+    if(mc.cores > 1){
+      cluster <- parallel::makeCluster(mc.cores)
+      list_out <- parallel::parLapply(cl = cluster, X,FUN, ...)
+      parallel::stopCluster(cluster)
+    } else{
+      list_out <- lapply(X, FUN, ...)
+    }
   } else{
     list_out <- parallel::mclapply(X, FUN, mc.cores = mc.cores, ...)
   }
