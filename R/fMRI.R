@@ -13,90 +13,124 @@ quick_convolve <- function(regressor, modulator, hkernel, frame_times) {
   return(computed_regressors)
 }
 
-make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
-                                         hrf_model = 'glover + derivative'){
-  if(!is.data.frame(events)) events <- do.call(rbind, events)
-  subject <- timeseries$subjects[1]
-  runs <- unique(timeseries$run)
-  events <- events[events$trial_type %in% unlist(factors),]
-  events$factor <- events$trial_type
-  events$modulation <- 1
-  events$regressor <- events$trial_type
-  for(fact in names(factors)){
-    idx <- events$trial_type %in% factors[[fact]]
-    events$factor[idx] <- fact
-    tmp <- events[idx,]
-    dm <- contrasts[[fact]]
-    tmp2 <- do.call(rbind, rep(list(tmp), ncol(dm)))
-    tmp2 <- tmp2[order(tmp2$onset),]
-    for(type in unique(tmp2$trial_type)){
-      tmp2$modulation[tmp2$trial_type == type] <- dm[rownames(dm) == type]
-      tmp2$regressor[tmp2$trial_type == type] <- colnames(dm)
-    }
-    tmp2 <- tmp2[!tmp2$modulation == 0,]
-    events <- events[!idx,]
-    events <- rbind(events, tmp2)
+make_contrasts <- function(events, contrasts = NULL, remove_intercept_contr = FALSE, do_print = F){
+  fname <- events$factor[1]
+  colnames(events)[colnames(events) == "event_type"] <- fname
+  if(!is.null(contrasts)){
+    events[,fname] <- factor(events[,fname], levels = rownames(contrasts))
+  } else{
+    events[,fname] <- factor(events[,fname])
   }
-  events <- events[order(events$onset),]
-  runs <- unique(timeseries$run)
-  dms <- vector(mode='list', length=length(runs))
-  for(run in runs) {
-    dms[[run]] <- make_fmri_design_matrix(timeseries[timeseries$run==run, 'time'],
-                                          events=events[events$run == run,],
-                                          hrf_model=hrf_model, add_intercept=FALSE)
+  stats::contrasts(events[,fname]) <- contrasts
+  design <- model.matrix(as.formula(paste0("~ ", fname)), events)
+  if(!is.null(contrasts)){
+    design <- design[,1:(ncol(contrasts)+1)]
   }
-  dm <- do.call(rbind, dms)
-  dm$subjects <- subject
-  return(dm)
+  colnames(design)[1] <- paste0(fname, "0")
+  if(remove_intercept_contr){
+    design <- design[,-1, drop = F]
+  }
+  all <- cbind(events, design)
+  if(do_print){
+    print(unique(all[,!colnames(all) %in% c("onset", "subjects", "duration")]))
+  }
+  all <- reshape(all, direction = "long", varying = colnames(design), v.names ="modulation",
+                 timevar = "regressor", times = colnames(design))
+  rownames(all) <- NULL
+  all <- all[all$modulation != 0,!colnames(all) %in% c("id", fname)]
+  all <- all[order(all$onset),]
+  return(all)
 }
 
+make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
+                                         hrf_model = 'glover + derivative'){
+  events$duration <- 0.01 # For now this is the default
+  if(!is.data.frame(events)) events <- do.call(rbind, events)
+  subjects <- unique(timeseries$subjects)
+  # if(!all(subjects %in% unique(events$subjects))) stop("subjects in timeseries and events not the same")
+  all_dms <- list()
+  for(subject in subjects){
+    ev_sub <- events[events$subjects == subject,]
+    ts_sub <- timeseries[timeseries$subjects == subject,]
+    runs <- unique(ts_sub$run)
+    # if(!all(runs %in% unique(ev_sub$run))) stop(paste0("subject ", subject, " does not have same runs in timeseries and events"))
+    dms_sub <- vector("list", length = length(runs))
+    for(run in runs){
+      ev_run <- ev_sub[ev_sub$run == run,]
+      ts_run <- ts_sub[ts_sub$run == run,]
+      ev_tmp <- data.frame()
+      for(fact in names(factors)){
+        idx <- ev_run$event_type %in% factors[[fact]]
+        ev_run$factor[idx] <- fact
+        tmp <- ev_run[idx,]
+        ev_tmp <- rbind(ev_tmp, make_contrasts(tmp, contrasts = contrasts[[fact]],
+                                               do_print = (run == runs[1]) & (subject == subjects[1])))
+      }
+      ev_tmp <- ev_tmp[order(ev_tmp$onset),]
+      dms_sub[[run]] <- make_fmri_design_matrix(ts_run$time,
+                                                events=ev_tmp,
+                                                hrf_model=hrf_model, add_intercept=FALSE)
+    }
+    dm_sub <- do.call(rbind, dms_sub)
+    dm_sub$subjects <- subject
+    all_dms[[as.character(subject)]] <- dm_sub
+  }
+  return(all_dms)
+}
+
+#' Make an emc design for (f)MRI models
+#'
+#' @param data The voxel or ROI timeseries (one at a time)
+#' @param events The event file
+#' @param model The fMRI model used. The default and only option at the moment is `normal_mri`
+#' @param factors A list. The factors used in the events files, e.g. list(E = c('acc', 'spd'))
+#' @param contrasts A list with one entry per contrast
+#' @param hrf_model The type of convolution used. Options, `glover` or `glover + derivative`
+#' @param ... Optional additional arguments
+#'
+#' @return An emc design matrix that can be used in `make_emc`
+#' @export
+#'
 make_design_fmri <- function(data,
                              events,
-                             model,
+                             model = normal_mri,
                              factors,
                              contrasts,
                              hrf_model='glover + derivative',
-                             add_intercept=FALSE,
                              ...) {
-
-  design_matrix <- make_fmri_design_matrix_wrap(data, events, factors, contrasts)
-
+  dots <- list(...)
+  dots$add_intercept <- FALSE
+  design_matrix <- make_fmri_design_matrix_wrap(data, events, factors, contrasts, hrf_model)
   data_names <- colnames(data)[!colnames(data) %in% c('subjects', 'run', 'time')]
-
   # First create the design matrix
 
   # generate parameter names
   if(!is.null(design_matrix)) {
-    par_names <- colnames(design_matrix)[colnames(design_matrix) != "subjects"]
+    par_names <- colnames(design_matrix[[1]])[colnames(design_matrix[[1]]) != "subjects"]
   } else {
     par_names <- c()
   }
-  if(!is.null(list(...)$par_regressors)) {
+  if(!is.null(dots$par_regressors)) {
     if(hrf_model == 'glover + derivative') {
-      par_names_from_events <- unique(events$trial_type)  # events contains all events
+      par_names_from_events <- unique(events$event_type)  # events contains all events
       par_names <- c(par_names, paste(rep(par_names_from_events, each=2), c('', '_derivative'), sep=''))
     } else if(hrf_model == 'glover') {
-      par_names_from_events <- unique(events$trial_type)  # events contains all events
+      par_names_from_events <- unique(events$event_type)  # events contains all events
       par_names <- c(par_names, par_names_from_events)
     }
   }
-  if(!('intercept' %in% par_names) & add_intercept) {
+  if(!('intercept' %in% par_names) & dots$add_intercept) {
     par_names <- c(par_names, 'intercept')
   }
 
-  if(!is.null(list(...)$par_regressors)) events_list <- split(list(...)$par_regressors, f=list(...)$par_regressors$subjects)
-
-  dms_list <- split(design_matrix, f=design_matrix$subjects)
+  if(!is.null(dots$par_regressors)) events_list <- split(dots$par_regressors, f=dots$par_regressors$subjects)
   model <- model()
-  if(!is.null(list(...)$par_regressors)) {
-    model$list(...)$par_regressors <- lapply(events_list, FUN = function(x){
+  if(!is.null(dots$par_regressors)) {
+    dots$par_regressors <- lapply(events_list, FUN = function(x){
       y <- x[,colnames(x) != "subjects"]
       y
     })
   }
-
-
-  dots <- list(...)
   if('hkernel' %in% names(dots)) {
     model$hkernel <- dots$hkernel
   }
@@ -116,7 +150,7 @@ make_design_fmri <- function(data,
   }
   model_function <- function() {return(model)}
   design <- list(Flist = Flist, model = model_function)
-  attr(design, "design_matrix") <- lapply(dms_list, FUN=function(x) {
+  attr(design, "design_matrix") <- lapply(design_matrix, FUN=function(x) {
     y <- x[,colnames(x) != 'subjects']
     data.matrix(y)
   })
@@ -238,11 +272,12 @@ hrf_kernel <- function(hrf_model, tr, oversampling=50, fir_delays=NULL) {
   } else if(hrf_model == 'glover + derivative') {
     hkernel = cbind(glover_hrf(tr, oversampling),
                     glover_time_derivative(tr, oversampling))
-  } else if(hrf_model == 'glover + derivative + dispersion') {
-    hkernel = cbind(glover_hrf(tr, oversampling),
-                    glover_time_derivative(tr, oversampling),
-                    glover_dispersion_derivative(tr, oversampling))
   }
+  # else if(hrf_model == 'glover + derivative + dispersion') {
+  #   hkernel = cbind(glover_hrf(tr, oversampling),
+  #                   glover_time_derivative(tr, oversampling),
+  #                   glover_dispersion_derivative(tr, oversampling))
+  # }
   return(hkernel)
 }
 
@@ -389,12 +424,6 @@ convolve_regressors_ <- function(events, hrf_model, frame_times, fir_delays=c(0)
 }
 
 
-# #' # Function to create fMRI design matrix from a few basicsFunction to create fMRI design matrix from a few basics
-# #'
-# #' @return
-# #' @export
-# #'
-# #' @examples
 make_fmri_design_matrix <- function(frame_times, events=NULL, hrf_model='glover',
                                     drift_model='cosine',
                                     high_pass=0.01,
@@ -426,11 +455,18 @@ make_fmri_design_matrix <- function(frame_times, events=NULL, hrf_model='glover'
   return(df)
 }
 
-normal <- function(){
+#' Run an MRI model
+#'
+#' @return A model list with all the relevant functions to run the MRI model
+#' @export
+#'
+#' @examples
+#' normal_mri()
+normal_mri <- function(){
   return(
     list(
       type="MRI",
-      c_name = "MRI",
+      # c_name = "MRI",
       p_types=c("sd" = log(1)), #This is a bit hacky for now
       # Transform to natural scale
       Ntransform=function(x) {
@@ -452,11 +488,11 @@ normal <- function(){
       # p_vector transform
       transform = function(x) x,
       # Random function for racing accumulators
-      rfun=function(lR,pars) rNORMAL(lR,pars),
+      rfun=function(lR,pars) return(pars),
       # Density function (PDF) for single accumulator
-      dfun=function(rt,pars) dNORMAL(rt,pars),
+      dfun=function(rt,pars) return(pars),
       # Probability function (CDF) for single accumulator
-      pfun=function(rt,pars) pNORMAL(rt,pars),
+      pfun=function(rt,pars) return(pars),
       # Race likelihood combining pfun and dfun
       log_likelihood=function(p_vector, dadm, predictionErrors=NULL, min_ll=log(1e-10), X2=NULL){
         # data
@@ -482,7 +518,7 @@ normal <- function(){
         #         }
 
         # transform parameters
-        p_vector <- normal()$Ntransform(p_vector)
+        p_vector <- normal_mri()$Ntransform(p_vector)
         X <- cbind(X, X2)
         # grab the right parameters
         is_sd <- grepl("sd", names(p_vector))
@@ -509,7 +545,7 @@ normal <- function(){
 
 # Script to run this ------------------------------------------------------
 # frame_times = seq(0, 100, 1.38)
-# events = data.frame('onset'=linspace(0, 50, 20), 'trial_type'=c(rep('cue',10),rep('stim',10)), 'duration'=1)
+# events = data.frame('onset'=linspace(0, 50, 20), 'event_type'=c(rep('cue',10),rep('stim',10)), 'duration'=1)
 # events['modulation'] = rnorm(n=20)
 # frame_times
 #
