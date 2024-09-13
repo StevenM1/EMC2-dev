@@ -34,6 +34,20 @@ get_stop_criteria <- function(stage, stop_criteria, type){
   return(stop_criteria)
 }
 
+
+fit_remove_samples <- function(emc){
+  if(chain_n(emc)[1,4] > chain_n(emc)[1,3]){
+    emc <- subset(emc, stage = "sample")
+  } else if (chain_n(emc)[1,4] > 0){
+    emc <- subset(emc, stage = c("adapt", "sample"))
+  } else if(chain_n(emc)[1,3] > 0){
+    emc <- subset(emc, stage = c("burn", "adapt"))
+  }
+  return(emc)
+}
+
+
+
 #' Custom function for more controlled model estimation
 #'
 #' Although typically users will rely on ``fit``, this function can be used for more fine-tuned specification of estimation needs.
@@ -61,7 +75,9 @@ get_stop_criteria <- function(stage, stop_criteria, type){
 #' @param max_tries An integer. How many times should it try to meet the finish
 #' conditions as specified by stop_criteria? Defaults to 20. max_tries is ignored if the required number of iterations has not been reached yet.
 #' @param n_blocks An integer. Number of blocks. Will block the parameter chains such that they are updated in blocks. This can be helpful in extremely tough models with a large number of parameters.
+#' @param thin_auto A boolean. If `TRUE` will automatically thin based on the effective sample size.
 #' @param stop_criteria A list. Defines the stopping criteria and for which types of parameters these should hold. See ``?fit``.
+#'
 #' @export
 #' @return An emc object
 #' @examples \dontrun{
@@ -76,12 +92,12 @@ get_stop_criteria <- function(stage, stop_criteria, type){
 #' # for MCMC 200 iterations
 #' emc <- run_emc(emc, stage = "preburn", stop_criteria = list(iter = 200))
 #'}
-
 run_emc <- function(emc, stage, stop_criteria,
-                         p_accept = .8, step_size = 100, verbose = FALSE, verboseProgress = FALSE,
-                         fileName = NULL,
-                         particles = NULL, particle_factor=50, cores_per_chain = 1,
-                         cores_for_chains = length(emc), max_tries = 20, n_blocks = 1){
+                    p_accept = .8, step_size = 100, verbose = FALSE, verboseProgress = FALSE,
+                    fileName = NULL,
+                    particles = NULL, particle_factor=50, cores_per_chain = 1,
+                    cores_for_chains = length(emc), max_tries = 20, n_blocks = 1,
+                    thin_auto = FALSE){
   if(Sys.info()[1] == "Windows" & cores_per_chain > 1) stop("only cores_for_chains can be set on Windows")
   if (verbose) message(paste0("Running ", stage, " stage"))
   attributes <- get_attributes(emc)
@@ -96,6 +112,7 @@ run_emc <- function(emc, stage, stop_criteria,
   progress <- progress[!names(progress) == 'emc'] # Frees up memory, courtesy of Steven
   particle_factor_in <- particle_factor; p_accept_in <- p_accept
   while(!progress$done){
+    emc <- fit_remove_samples(emc)
     if(!is.null(progress$n_blocks)) n_blocks <- progress$n_blocks
     emc <- add_proposals(emc, stage, cores_per_chain*cores_for_chains, n_blocks)
     if(!is.null(progress$gds_bad)){
@@ -103,11 +120,25 @@ run_emc <- function(emc, stage, stop_criteria,
       p_accept_in <- pmax(0.4, p_accept - progress$gds_bad*.3)
       particle_factor_in[!progress$gds_bad] <- particle_factor
     }
-    sub_emc <- subset(emc, filter = max(chain_n(emc) - 1), stage = stage)
-    sub_emc <- auto_mclapply(sub_emc,run_stages, stage = stage, iter= progress$step_size,
+
+    nstage <- colSums(chain_n(emc))
+    if(all(nstage == 0)){
+      sub_emc <- emc # Very first iterations, no preburn samples yet
+    } else if(nstage[stage] == 0){
+      # There are no samples in the current stage yet so take the last one from the previous stage
+      has_ran <- nstage[nstage != 0]
+      prev_stage <- names(nstage)[sum(nstage != 0)]
+      sub_emc <- subset(emc, filter = chain_n(emc)[1,prev_stage], stage = prev_stage)
+    } else{
+      sub_emc <- subset(emc, filter = chain_n(emc)[1,stage] - 1, stage = stage)
+    }
+    sub_emc <- auto_mclapply(sub_emc,run_stages, stage = stage, iter= max(progress$step_size - 1, 1),
                               verbose=verbose,  verboseProgress = verboseProgress,
                               particles=particles,particle_factor=particle_factor_in,
                               p_accept=p_accept_in, n_cores=cores_per_chain, mc.cores = cores_for_chains)
+    if(stage != 'preburn' & thin_auto){
+      sub_emc <- auto_thin(sub_emc, stage = stage)
+    }
     emc <- concat_emc(emc, sub_emc)
     rm(sub_emc)
     for(i in 2:length(emc)){ # Frees up memory, courtesy of Steven

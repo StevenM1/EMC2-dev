@@ -345,6 +345,7 @@ fit.emc <- function(emc, stage = NULL, iter = 1000, stop_criteria = NULL,report_
                     p_accept = .8, step_size = 100, verbose = TRUE, verboseProgress = FALSE, fileName = NULL,
                     particles = NULL, particle_factor=50, cores_per_chain = 1,
                     cores_for_chains = length(emc), max_tries = 20, n_blocks = 1,
+                    thin_auto = FALSE,
                     ...){
 
   if (report_time) start_time <- Sys.time()
@@ -381,7 +382,7 @@ fit.emc <- function(emc, stage = NULL, iter = 1000, stop_criteria = NULL,report_
   if(stage == "preburn"){
     emc <- run_emc(emc, stage = "preburn", stop_criteria[['preburn']], cores_for_chains = cores_for_chains, p_accept = p_accept,
                              step_size = step_size,  verbose = verbose, verboseProgress = verboseProgress,
-                             fileName = fileName,
+                             fileName = fileName, thin_auto = thin_auto,
                              particles = particles, particle_factor =  particle_factor,
                              cores_per_chain = cores_per_chain, max_tries = max_tries, n_blocks = n_blocks)
   }
@@ -389,21 +390,21 @@ fit.emc <- function(emc, stage = NULL, iter = 1000, stop_criteria = NULL,report_
   if(any(stage %in% c("preburn", "burn"))){
     emc <-  run_emc(emc, stage = "burn", stop_criteria[['burn']], cores_for_chains = cores_for_chains, p_accept = p_accept,
                               step_size = step_size,  verbose = verbose, verboseProgress = verboseProgress,
-                              fileName = fileName,
+                              fileName = fileName, thin_auto = thin_auto,
                               particles = particles, particle_factor =  particle_factor,
                               cores_per_chain = cores_per_chain, max_tries = max_tries, n_blocks = n_blocks)
   }
   if(any(stage %in% c("preburn", "burn", "adapt"))){
     emc <-  run_emc(emc, stage = "adapt", stop_criteria[['adapt']],cores_for_chains = cores_for_chains, p_accept = p_accept,
                               step_size = step_size,  verbose = verbose, verboseProgress = verboseProgress,
-                              fileName = fileName,
+                              fileName = fileName, thin_auto = thin_auto,
                               particles = particles, particle_factor =  particle_factor,
                               cores_per_chain = cores_per_chain, max_tries = max_tries, n_blocks = n_blocks)
   }
   if(any(stage %in% c("preburn", "burn", "adapt", "sample")) ){
     emc <-  run_emc(emc, stage = "sample",stop_criteria[['sample']],cores_for_chains = cores_for_chains, p_accept = p_accept,
                               step_size = step_size,  verbose = verbose, verboseProgress = verboseProgress,
-                              fileName = fileName,
+                              fileName = fileName, thin_auto = thin_auto,
                               particles = particles, particle_factor = particle_factor,
                               cores_per_chain = cores_per_chain, max_tries = max_tries, n_blocks = n_blocks)
   }
@@ -475,6 +476,7 @@ fit.emc <- function(emc, stage = NULL, iter = 1000, stop_criteria = NULL,report_
 #' updated in blocks. This can be helpful in extremely tough models with a large number of parameters.
 #' @param stop_criteria A list. Defines the stopping criteria and for which types
 #' of parameters these should hold. See the details and examples section.
+#' @param thin_auto A boolean. If `TRUE` will automatically thin based on the effective sample size.
 #' @param report_time Boolean. If `TRUE`, the time taken to run the MCMC chains till completion of the `stop_criteria` will be printed.
 #' @param ... Additional optional arguments
 #' @return An emc object
@@ -896,6 +898,30 @@ subset.emc <- function(x, stage = "sample", filter = NULL, thin = 1, keep_stages
   return(x)
 }
 
+#' @rdname auto_thin
+#' @export
+auto_thin.emc <- function(emc, stage = "sample", selection = c("alpha", "mu")){
+  ess <- 0
+  for(select in selection){
+    ess <- ess + ess_summary(emc, selection = select, stage = stage, stat_only = TRUE, stat = "mean")
+  }
+  ess <- ess/length(selection)
+  return(subset(emc, stage = stage, length.out = min(ess/length(emc), sum(chain_n(emc)[1,stage]))))
+}
+
+
+#' Automatically thin an emc object
+#'
+#' Uses the effective sample size of `selection` to determine how much to optimally thin an emc object
+#'
+#' @inheritParams get_pars
+#' @param selection Which parameter types (i.e. 'alpha' or 'mu' to consider when determining the effective sample size)
+#' @param ... additional optional arguments
+#'
+#' @export
+auto_thin <- function(emc, stage = "sample", selection = c("alpha", "mu"), ...){
+  UseMethod("auto_thin")
+}
 
 #' @rdname gd_summary
 #' @export

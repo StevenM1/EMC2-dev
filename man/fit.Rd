@@ -22,6 +22,7 @@
   cores_for_chains = length(emc),
   max_tries = 20,
   n_blocks = 1,
+  thin_auto = FALSE,
   ...
 )
 
@@ -73,6 +74,8 @@ ignored if the required number of iterations has not been reached yet.}
 
 \item{n_blocks}{An integer. Number of blocks. Will block the parameter chains such that they are
 updated in blocks. This can be helpful in extremely tough models with a large number of parameters.}
+
+\item{thin_auto}{A boolean. If \code{TRUE} will automatically thin based on the effective sample size.}
 
 \item{...}{Additional optional arguments}
 }
