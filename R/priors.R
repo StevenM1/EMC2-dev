@@ -17,7 +17,7 @@
 #' @param fill_default Boolean, If `TRUE` will fill all non-specified parameters, and parameters outside of `ask`, to default values
 #' @param ... Either values to prefill, i.e. `theta_mu_mean = c(1:6)`, or additional arguments such as `n_factors = 2`
 #' @return A prior list object
-#' @examples \dontrun{
+#' @examples
 #' # First define a design for the model
 #' design_DDMaE <- design(data = forstmann,model=DDM,
 #'                            formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
@@ -40,7 +40,6 @@
 #'                            constants=c(s=log(1)))
 #' # We can easily update the prior
 #' prior_DDMat0E <- prior(design_DDMat0E, update = prior_DDMaE)
-#' }
 #' @export
 prior <- function(design, type = "standard", update = NULL,
                       ask = NULL, fill_default = TRUE, ...){
@@ -78,16 +77,21 @@ prior <- function(design, type = "standard", update = NULL,
       } else{
         # First make sure we only take diagonals
         if(!is.null(dim(update[[name]]))){
+          prior_par_names <- names(diag(prior$prior[[name]]))
           upd <- diag(update[[name]])
         } else{
+          prior_par_names <- names(prior$prior[[name]])
           upd <- update[[name]]
         }
         # now fill in
-        args_names <- names(args[[name]])
         upd_names <- names(upd)
-        for(i in 1:length(upd)){
-          if(upd_names[i] %in% args_names){
-            args[[name]][args_names == upd_names[i]] <- upd[i]
+        if(length(upd) == 1){
+          if(!name %in% names(args)) args[[name]] <- upd
+        } else{
+          for(i in 1:length(upd)){
+            if(upd_names[i] %in% prior_par_names & (!upd_names[i] %in% names(args[[name]]))){
+              args[[name]][upd_names[i]] <- upd[i]
+            }
           }
         }
       }
@@ -114,7 +118,7 @@ prior <- function(design, type = "standard", update = NULL,
               to_do <- rep(F, length(to_check))
             } else{
               to_do <- !(names(to_check) %in% names(input))
-              to_check[!to_do] <- input
+              to_check[!to_do] <- input[names(input) %in% names(to_check)][names(to_check)[!to_do]]
               prior$prior[[pri]][,] <- diag(to_check)
             }
           } else{
@@ -127,7 +131,7 @@ prior <- function(design, type = "standard", update = NULL,
               to_do <- rep(F, length(to_check))
             } else{
               to_do <- !(names(to_check) %in% names(input))
-              to_check[!to_do] <- input
+              to_check[!to_do] <- input[names(input) %in% names(to_check)][names(to_check)[!to_do]]
               prior$prior[[pri]] <- to_check
             }
           }
@@ -244,13 +248,14 @@ ask_user_prior <- function(prior, cur_idx, to_do, fill_default, group_to_do){
 #' @param prior A prior list created with `prior`
 #' @param design A design list created with `design`
 #' @param do_plot Boolean. If `FALSE` will only return prior samples and omit plotting.
+#' @param covariates dataframe/functions as specified by the design
 #' @inheritParams plot_pars
 #' @param ... Optional arguments that can be passed to get_pars, histogram, plot.default (see par()),
 #' or arguments required for the types of models e.g. n_factors for type = "factor"
 #' @return An mcmc.list object with prior samples of the selected type
 #' @export
 #'
-#' @examples
+#' @examples \donttest{
 #' # First define a design for the model
 #' design_DDMaE <- design(data = forstmann,model=DDM,
 #'                            formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
@@ -263,13 +268,17 @@ ask_user_prior <- function(prior, cur_idx, to_do, fill_default, group_to_do){
 #' # Here we left the variance prior at default
 #' prior_DDMaE <- prior(design_DDMaE,mu_mean=p_vector,mu_sd=psd)
 #' # Now we can plot all sorts of (implied) priors
-#' plot_prior(prior_DDMaE, design_DDMaE, selection = "mu")
-#' plot_prior(prior_DDMaE, design_DDMaE, selection = "mu", mapped = FALSE)
+#' plot_prior(prior_DDMaE, design_DDMaE, selection = "mu", N = 1e3)
+#' plot_prior(prior_DDMaE, design_DDMaE, selection = "mu", mapped = FALSE, N=1e3)
 #' # We can also plot the implied prior on the participant level effects.
-#' plot_prior(prior_DDMaE, design_DDMaE, selection = "alpha", col = "green", N = 1e4)
-plot_prior <- function(prior, design, selection = "mu", do_plot = TRUE,
+#' plot_prior(prior_DDMaE, design_DDMaE, selection = "alpha", col = "green", N = 1e3)
+#' }
+
+plot_prior <- function(prior, design, selection = "mu", do_plot = TRUE, covariates = NULL,
                            layout = NA, N = 5e4, ...){
   dots <- add_defaults(list(...), breaks = 30, cut_off = 0.0015, prob = TRUE, by_subject = TRUE, map = TRUE)
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   if(is.null(design$Ffactors)){
     dots$map <- FALSE
     warning("For joint models, map = TRUE is not yet implemented")
@@ -278,7 +287,7 @@ plot_prior <- function(prior, design, selection = "mu", do_plot = TRUE,
   if(type == "single") selection <- "alpha"
   samples <-  get_objects(design = design, prior = prior, type = type, sample_prior = T,
                           selection = selection, N = N, ...)
-  MCMC_samples <- do.call(get_pars, c(list(samples, selection = selection, type = type), fix_dots(dots, get_pars)))
+  MCMC_samples <- do.call(get_pars, c(list(samples, selection = selection, type = type, covariates = covariates), fix_dots(dots, get_pars)))
   if(do_plot){
     for(i in 1:length(MCMC_samples)){
       xlab <- ifelse(is.null(names(MCMC_samples)[i]), selection, names(MCMC_samples)[i])

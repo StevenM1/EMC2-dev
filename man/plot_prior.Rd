@@ -9,6 +9,7 @@ plot_prior(
   design,
   selection = "mu",
   do_plot = TRUE,
+  covariates = NULL,
   layout = NA,
   N = 50000,
   ...
@@ -22,6 +23,8 @@ plot_prior(
 \item{selection}{A Character string. Indicates which parameter type to use (e.g., \code{alpha}, \code{mu}, \code{sigma2}, \code{correlation}).}
 
 \item{do_plot}{Boolean. If \code{FALSE} will only return prior samples and omit plotting.}
+
+\item{covariates}{dataframe/functions as specified by the design}
 
 \item{layout}{A vector indicating which layout to use as in par(mfrow = layout). If NA, will automatically generate an appropriate layout.}
 
@@ -37,6 +40,7 @@ An mcmc.list object with prior samples of the selected type
 Title
 }
 \examples{
+\donttest{
 # First define a design for the model
 design_DDMaE <- design(data = forstmann,model=DDM,
                            formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
@@ -49,8 +53,9 @@ psd <- c(v_Sleft=1,v_Sright=1,a=.3,a_Eneutral=.3,a_Eaccuracy=.3,
 # Here we left the variance prior at default
 prior_DDMaE <- prior(design_DDMaE,mu_mean=p_vector,mu_sd=psd)
 # Now we can plot all sorts of (implied) priors
-plot_prior(prior_DDMaE, design_DDMaE, selection = "mu")
-plot_prior(prior_DDMaE, design_DDMaE, selection = "mu", mapped = FALSE)
+plot_prior(prior_DDMaE, design_DDMaE, selection = "mu", N = 1e3)
+plot_prior(prior_DDMaE, design_DDMaE, selection = "mu", mapped = FALSE, N=1e3)
 # We can also plot the implied prior on the participant level effects.
-plot_prior(prior_DDMaE, design_DDMaE, selection = "alpha", col = "green", N = 1e4)
+plot_prior(prior_DDMaE, design_DDMaE, selection = "alpha", col = "green", N = 1e3)
+}
 }

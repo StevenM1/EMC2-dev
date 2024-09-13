@@ -37,6 +37,8 @@ plot_defective_density <- function(data,subject=NULL,factors=NULL,
                                    rt_pos="top",accuracy="topright",
                                    ...)
 {
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   dots <- list(...)
   if (!is.null(subject)) {
     snams <- levels(data$subjects)
@@ -199,6 +201,8 @@ plot_fit_choice <- function(data,pp,subject=NULL,factors=NULL,functions=NULL,
                             layout=NULL,mfcol=TRUE,
                             signalFactor="S",zROC=FALSE,qfun=qnorm,lim=NULL,rocfit_cex=.5)
 {
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   if (!is.null(stat) & is.null(factors)) factors <- NA
   if (!is.null(subject)) {
     snams <- levels(data$subjects)
@@ -375,9 +379,9 @@ plot_fit_choice <- function(data,pp,subject=NULL,factors=NULL,functions=NULL,
 #' @param main Character. Pasted before the plot title, especially useful when specifying a stat argument.
 #' @return If stat argument is provided, a vector of observed values and predicted quantiles
 #' is returned
-#' @examples \dontrun{
+#' @examples \donttest{
 #' # First generate posterior predictives based on an emc object run with run_emc
-#' pp <- predict(samples_LNR, n_cores = 4)
+#' pp <- predict(samples_LNR, n_cores = 1, n_post = 10)
 #' # Then visualize the model fit
 #' plot_fit(forstmann, pp, factors = c("S", "E"), layout = c(2,3))
 #'
@@ -584,12 +588,12 @@ plot_fit <- function(data,pp,subject=NULL,factors=NULL,functions=NULL,
 #' If number of samples in stage or selection exceeds N, a random subset will be taken of size N
 #' @param ... Optional arguments that can be passed to `get_pars`
 #' @return Invisibly returns a matrix with the correlations between the parameters.
-#' @examples \dontrun{
+#' @examples \donttest{
 #' # Plot the sloppiness for the individual-level subjects
 #' pairs_posterior(samples_LNR, selection = "alpha")
 #'
 #' # We can also choose group-level parameters and subsets of the parameter space
-#' pairs_posterior(samples_LNR, use_par = c("v", "B", "t0"), selection = "sigma2")
+#' pairs_posterior(samples_LNR, use_par = c("m", "t0"), selection = "sigma2")
 #' }
 #' @export
 
@@ -662,7 +666,7 @@ pairs_posterior <- function(emc, selection="alpha", scale_subjects=TRUE,
 #' @param round Integer. To how many digits will the output be rounded.
 #' @param ... Optional additional arguments that can be passed to plot.default.
 #' @return Vector with highest likelihood point, input and mismatch between true and highest point
-#' @examples
+#' @examples \donttest{
 #' # First create a design
 #' design_DDMaE <- design(data = forstmann,model=DDM,
 #'                       formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
@@ -674,7 +678,7 @@ pairs_posterior <- function(emc, selection="alpha", scale_subjects=TRUE,
 #' profile_plot(p_vector = p_vector, p_min = c(t0 = -1.35),
 #'              p_max = c(t0 = -1.45), use_par = c("a", "t0", "SZ"),
 #'              data = forstmann, design = design_DDMaE, n_point = 10)
-
+#' }
 #' @export
 
 profile_plot <- function(data, design, p_vector, range = .5, layout = NA,
@@ -684,6 +688,8 @@ profile_plot <- function(data, design, p_vector, range = .5, layout = NA,
                          ...)
 
 {
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   dots <- list(...)
   lfun <- function(i,x,p_vector,pname,dadm) {
     p_vector[pname] <- x[i]
@@ -697,7 +703,11 @@ profile_plot <- function(data, design, p_vector, range = .5, layout = NA,
     par(mfrow = coda_setmfrow(Nchains = 1, Nparms = length(use_par),
                               nplots = 1))
   } else{par(mfrow=layout)}
-  if(is.null(dots$dadm)) dadm <- design_model(data, design, verbose = FALSE)
+  if(is.null(dots$dadm)){
+    dadm <- design_model(data, design, verbose = FALSE)
+  } else{
+    dadm <- dots$dadm
+  }
   out <- data.frame(true = rep(NA, length(use_par)), max = rep(NA, length(use_par)), miss = rep(NA, length(use_par)))
   rownames(out) <- use_par
   for(p in 1:length(p_vector)){
@@ -764,6 +774,8 @@ plot_pars <- function(emc,layout=NA, selection="mu", show_chains = FALSE, plot_p
                       use_prior_lim = !all_subjects, lpos = "topright", true_pars = NULL, all_subjects = FALSE,
                       prior_plot_args = list(), true_plot_args = list(), ...)
 {
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   dots <- list(...)
   type <- attr(emc[[1]], "variant_funs")$type
   if(length(dots$subject) == 1 || emc[[1]]$n_subjects == 1) dots$by_subject <- TRUE
@@ -779,9 +791,10 @@ plot_pars <- function(emc,layout=NA, selection="mu", show_chains = FALSE, plot_p
     MCMC_samples <- list(lapply(MCMC_samples, function(x) do.call(rbind, x)))
     names(MCMC_samples) <- "subjects"
   }
-  psamples <-  get_objects(sampler = emc, design = attr(emc,"design_list")[[1]],
+  psamples <-  get_objects(sampler = emc, design = attr(emc,"design_list"),
                            type = type, sample_prior = T,
-                           selection = selection, N = N)
+                           selection = selection, N = N,
+                           prior = emc[[1]]$prior)
   pMCMC_samples <- do.call(get_pars, c(list(psamples, selection = selection, type = type),
                                        fix_dots(dots, get_pars, exclude = c("thin", "filter", "chain", "subject"))))
   if(length(pMCMC_samples) != length(MCMC_samples)) pMCMC_samples <- rep(pMCMC_samples, length(MCMC_samples))
@@ -789,7 +802,6 @@ plot_pars <- function(emc,layout=NA, selection="mu", show_chains = FALSE, plot_p
   true_MCMC_samples <- NULL
   if(!is.null(true_pars)){
     if(!is(true_pars, "emc")){
-      if(selection == "sigma2" & !is.matrix(true_pars)) true_pars <- diag(true_pars)
       true_pars <- do.call(get_pars, c(list(emc, selection = selection, type = type, true_pars = true_pars),
                                        fix_dots(dots, get_pars, exclude = c("thin", "filter", "chain"))))
     } else{
@@ -924,6 +936,8 @@ make_recov_summary <- function(stats){
 plot_mcmc <- function(emc, selection = "mu", fun = 'cumuplot', layout=NA, chain = 1,
                       plot_type = NULL, ...)
 {
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   dots <- list(...)
   if(length(dots$subject) == 1 || emc[[1]]$n_subjects == 1) dots$by_subject <- TRUE
   MCMC_samples <- do.call(get_pars, c(list(emc, selection = selection, chain = chain),
@@ -966,6 +980,8 @@ plot_mcmc <- function(emc, selection = "mu", fun = 'cumuplot', layout=NA, chain 
 #' @return A coda plot
 plot_mcmc_list <- function(emc, selection = "mu", fun = 'traceplot', layout=NA, ...)
 {
+  oldpar <- par(no.readonly = TRUE) # code line i
+  on.exit(par(oldpar)) # code line i + 1
   dots <- list(...)
   if(length(dots$subject) == 1 || emc[[1]]$n_subjects == 1) dots$by_subject <- TRUE
   MCMC_samples <- do.call(get_pars, c(list(emc, selection = selection), fix_dots(dots, get_pars)))

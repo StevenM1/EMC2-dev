@@ -24,7 +24,7 @@ add_info_blocked <- function(sampler, prior = NULL, ...){
 #' @inheritParams get_prior_standard
 #' @param par_groups Integer vector indicating which parts of the covariance matrix should be blocked together
 #' @return A list with a single entry of type of samples from the prior (if sample = TRUE) or else a prior object
-#' @examples \dontrun{
+#' @examples
 #' # First define a design for the model
 #' design_DDMaE <- design(data = forstmann,model=DDM,
 #'                            formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
@@ -34,8 +34,8 @@ add_info_blocked <- function(sampler, prior = NULL, ...){
 #' # We can change values in the default prior or use `prior`
 #' # Then we can get samples from this prior e.g.
 #' samples <- get_prior_blocked(prior = prior, design = design_DDMaE,
-#'   sample = TRUE, type = "mu")
-#' }
+#'   sample = TRUE, selection = "mu")
+#'
 #' @export
 
 get_prior_blocked <- function(prior = NULL, n_pars = NULL, sample = TRUE, N = 1e5, selection = "mu", design = NULL,
@@ -77,25 +77,25 @@ get_prior_blocked <- function(prior = NULL, n_pars = NULL, sample = TRUE, N = 1e
       }
     }
     if(selection %in% c("sigma2", "covariance", "correlation", "Sigma", "alpha")) {
-      vars_make <- vars <- array(NA_real_, dim = c(n_pars, n_pars, N))
+      vars <- array(NA_real_, dim = c(n_pars, n_pars, N))
       colnames(vars) <- rownames(vars) <- par_names
       for(i in 1:N){
         a_half <- 1 / rgamma(n = n_pars,shape = 1/2,
                              rate = 1/(prior$A^2))
         attempt <- tryCatch({
-          vars_make[,,i] <- riwish(prior$v + n_pars - 1, 2 * prior$v * diag(1 / a_half))
+          vars[,,i] <- riwish(prior$v + n_pars - 1, 2 * prior$v * diag(1 / a_half))
         },error=function(e) e, warning=function(w) w)
         if (any(class(attempt) %in% c("warning", "error", "try-error"))) {
           sample_idx <- sample(1:(i-1),1)
-          vars_make[,,i] <- vars_make[,,sample_idx]
+          vars[,,i] <- vars[,,sample_idx]
         }
       }
-      idx <- 0
+      constraintMat <- matrix(0, n_pars, n_pars)
       for(i in 1:length(unique(par_groups))){
-        n_pars <- sum(par_groups == i)
-        vars[(idx+1):(idx+n_pars), (idx+1):(idx+n_pars),] <- vars_make[(idx+1):(idx+n_pars), (idx+1):(idx+n_pars),]
-        idx <- idx + n_pars
+        idx <- par_groups == i
+        constraintMat[idx, idx] <- Inf
       }
+      vars <- constrain_lambda(vars, constraintMat)
       if(selection != "alpha") samples$theta_var <- vars
     }
     if(selection %in% "alpha"){
@@ -128,11 +128,10 @@ gibbs_step_blocked <- function(sampler, alpha){
   last <- last_sample_standard(sampler$samples)
   prior <- sampler$prior
   n_pars_total <- sampler$n_pars-sum(sampler$nuisance) - sum(sampler$grouped)
-  tmu_out <- numeric()
-  a_half_out <- numeric()
+  tmu_out <- numeric(n_pars_total)
+  a_half_out <- numeric(n_pars_total)
   tvar_out <- matrix(0, nrow = n_pars_total, ncol = n_pars_total)
   tvinv_out <- matrix(0, nrow = n_pars_total, ncol = n_pars_total)
-  idx <- 0
   for(group in 1:sampler$n_par_groups){
     group_idx <- sampler$par_groups == group
     n_pars <- sum(group_idx)
@@ -152,25 +151,23 @@ gibbs_step_blocked <- function(sampler, alpha){
 
       # Sample new mixing weights.
       a_half <- 1 / rgamma(n = n_pars,shape = (prior$v + n_pars) / 2,
-                           rate = prior$v * diag(tvinv) + 1/(prior$v^2))
+                           rate = prior$v * diag(tvinv) + 1/(prior$A[group_idx]^2))
     } else{
       var_mu = 1.0 / (sampler$n_subjects * last$tvinv[group_idx, group_idx] + prior$theta_mu_invar[group_idx, group_idx])
-      mean_mu = var_mu * (sum(alpha[group_idx,]) * last$tvinv[group_idx, group_idx] + prior$theta_mu_invar[group_idx, group_idx] * prior$theta_mu_mean[group_idx])
+      mean_mu = var_mu * (sum(alpha[group_idx,]) * last$tvinv[group_idx,group_idx] + prior$theta_mu_mean[group_idx] * prior$theta_mu_invar[group_idx, group_idx])
       tmu <- rnorm(n_pars, mean_mu, sd = sqrt(var_mu))
       tvinv = rgamma(n=n_pars, shape=prior$v/2 + sampler$n_subjects/2, rate=prior$v/last$a_half +
-                       rowSums( (alpha-tmu)^2 ) / 2)
+                       sum( (alpha[group_idx,]-tmu)^2 ) / 2)
       tvar = 1/tvinv
-      #Contrary to standard pmwg I use shape, rate for IG()
-      a_half <- 1 / rgamma(n = n_pars, shape = (prior$v + 1) / 2,
-                           rate = prior$v * tvinv + 1/(prior$v^2))
+      a_half <- 1 / rgamma(n = 1, shape = (prior$v+ 1) / 2,
+                           rate = prior$v * tvinv + 1/(prior$A[group_idx]^2))
     }
 
-    tmu_out <- c(tmu_out, tmu)
-    a_half_out <- c(a_half_out, a_half)
+    tmu_out[group_idx] <- tmu
+    a_half_out[group_idx] <- a_half
 
-    tvar_out[(idx+1):(idx+n_pars), (idx+1):(idx+n_pars)] <- tvar
-    tvinv_out[(idx+1):(idx+n_pars), (idx+1):(idx+n_pars)] <- tvinv
-    idx <- idx + n_pars
+    tvar_out[group_idx, group_idx] <- tvar
+    tvinv_out[group_idx, group_idx] <- tvinv
   }
 
   names(tmu_out) <- sampler$par_names
@@ -206,3 +203,58 @@ prior_dist_blocked <- function(parameters, info){
   stop("no IS2 for blocked estimation yet")
 
 }
+
+# bridge_sampling ---------------------------------------------------------
+bridge_group_and_prior_and_jac_blocked <- function(proposals_group, proposals_list, info){
+  prior <- info$prior
+  par_groups <- info$par_groups
+  has_cov <- par_groups %in% which(table(par_groups) > 1)
+  proposals <- do.call(cbind, proposals_list)
+  theta_mu <- proposals_group[,1:info$n_pars]
+  theta_a <- proposals_group[,(info$n_pars + 1):(2*info$n_pars)]
+  theta_var1 <- proposals_group[,(2*info$n_pars + 1):(2*info$n_pars + sum(!has_cov))]
+  theta_var2 <- proposals_group[,(2*info$n_pars + sum(!has_cov) + 1):(2*info$n_pars + sum(!has_cov) + (sum(has_cov) * (sum(has_cov) +1))/2)]
+
+  n_iter <- nrow(theta_mu)
+  sum_out <- numeric(n_iter)
+  var_curr <- matrix(0, nrow = info$n_pars, ncol = info$n_pars)
+
+  for(i in 1:n_iter){ # these unfortunately can't be vectorized
+    # prior_delta2 <- log(robust_diwish(solve(delta2_curr), v=prior$a_d, S = diag(prior$b_d, sum(!info$is_structured))))
+    var2curr <- unwind_chol(theta_var2[i,], reverse = T)
+    var_curr[!has_cov, !has_cov] <- diag(exp(theta_var1[i,]), sum(!has_cov))
+    var_curr[has_cov, has_cov] <- var2curr
+    proposals_curr <- matrix(proposals[i,], ncol = info$n_pars, byrow = T)
+    group_ll <- sum(dmvnorm(proposals_curr, theta_mu[i,], var_curr, log = T))
+    prior_var1 <- sum(logdinvGamma(exp(theta_var1[i,]), shape = prior$v/2, rate = prior$v/exp(theta_a[i,!has_cov])))
+    prior_var2 <- log(robust_diwish(var2curr, v=prior$v+ sum(has_cov)-1, S = 2*prior$v*diag(1/theta_a[i,has_cov])))
+    prior_a <- sum(logdinvGamma(exp(theta_a[i,]), shape = 1/2,rate=1/(prior$A^2)))
+    jac_var2 <- log(2^sum(has_cov))+sum((sum(has_cov))*log(diag(var2curr))) # Log of derivative of cholesky transformation
+    sum_out[i] <- group_ll + prior_var1 + prior_var2 + jac_var2 + prior_a
+  }
+  prior_mu <- dmvnorm(theta_mu, mean = prior$theta_mu_mean, sigma = prior$theta_mu_var, log =T)
+  jac_var1 <- rowSums(theta_var1)
+  jac_a <- rowSums(theta_a)
+  return(sum_out + prior_mu + jac_var1 + jac_a)
+}
+
+
+bridge_add_info_blocked <- function(info, samples){
+  par_groups <- samples$par_groups
+  has_cov <- par_groups %in% which(table(par_groups) > 1)
+  info$par_groups <- par_groups
+  info$group_idx <- (samples$n_pars*samples$n_subjects + 1):(samples$n_pars*samples$n_subjects + 2*samples$n_pars +
+                                                               sum(!has_cov) + (sum(has_cov) * (sum(has_cov) +1))/2)
+  return(info)
+}
+
+bridge_add_group_blocked <- function(all_samples, samples, idx){
+  all_samples <- cbind(all_samples, t(samples$samples$theta_mu[,idx]))
+  all_samples <- cbind(all_samples, t(log(samples$samples$a_half[,idx])))
+  par_groups <- samples$par_groups
+  has_cov <- par_groups %in% which(table(par_groups) > 1)
+  all_samples <- cbind(all_samples, t(log(matrix(apply(samples$samples$theta_var[!has_cov,!has_cov,idx, drop = F], 3, diag), ncol = nrow(all_samples)))))
+  all_samples <- cbind(all_samples, t(matrix(apply(samples$samples$theta_var[has_cov,has_cov,idx, drop = F], 3, unwind_chol), ncol = nrow(all_samples))))
+  return(all_samples)
+}
+

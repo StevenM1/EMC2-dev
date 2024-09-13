@@ -1,13 +1,19 @@
 Package: EMC2
-Title: Bayesian hierarchical analysis of cognitive models of choice
-Version: 1.0.0
+Title: Bayesian Hierarchical Analysis of Cognitive Models of Choice
+Version: 2.0.2
 Authors@R: 
     c(person("Niek", "Stevenson", email = "niek.stevenson@gmail.com", 
-           role = c("aut", "cre")),
+           role = c("aut", "cre"), comment = c(ORCID = "0000-0003-3206-7544")),
       person("Michelle", "Donzallaz", 
            role = c("aut")),
       person("Andrew", "Heathcote", 
-           role = c("aut")))
+           role = c("aut")),
+      person("Steven", "Miletić", 
+           role = c("ctb")),
+      person("Jochen", "Voss", 
+           role = c("ctb")),
+      person("Andreas", "Voss", 
+           role = c("ctb")))
 Description: Fit Bayesian (hierarchical) cognitive models
     using a linear modeling language interface using particle metropolis Markov
     chain Monte Carlo sampling with Gibbs steps. The diffusion decision model (DDM), 
@@ -21,8 +27,8 @@ Description: Fit Bayesian (hierarchical) cognitive models
     posterior inference. Models can be easily evaluated using functions
     that plot posterior predictions or using relative model comparison metrics 
     such as information criteria or Bayes factors.    
-    References: Stevenson et al. (2024) <doi.org/10.31234/osf.io/2e4dq>.
-License: MIT + file LICENSE
+    References: Stevenson et al. (2024) <doi:10.31234/osf.io/2e4dq>.
+License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
@@ -56,6 +62,6 @@ Imports:
 LinkingTo: 
     Rcpp
 Depends: 
-    R (>= 2.10)
+    R (>= 3.5.0)
 LazyData: true
 Config/testthat/parallel: true

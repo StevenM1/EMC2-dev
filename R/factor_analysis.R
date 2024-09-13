@@ -160,15 +160,15 @@ rearrange_loadings <- function(loadings){
 #' @param merge_chains Return the loadings for each chain separately or merged together.
 #'
 #' @return standardized loadings
-#' @examples \dontrun{
-#' # For a given set of hierarchical factor model samples we can standardize the loadings
-#' standardize_loadings(emc)
-#' # By default merges across chains, but we could also get a list of standardized loadings
-#' standardize_loadings(emc, merge_chains = FALSE)
-#' }
-#'
+# #' @examples \donttest{
+# #' # For a given set of hierarchical factor model samples we can standardize the loadings
+# #' standardize_loadings(emc)
+# #' # By default merges across chains, but we could also get a list of standardized loadings
+# #' standardize_loadings(emc, merge_chains = FALSE)
+# #' }
+# #'
 standardize_loadings <- function(emc = NULL, loadings = NULL, sig_err_inv = NULL,
-                                 stage = "sample", merge_chains = T){
+                                 stage = "sample", merge_chains = TRUE){
   stdize_set <- function(samples = NULL, idx = NULL, loadings = NULL, sig_err_inv = NULL){
     if(is.null(loadings)) loadings <- samples$samples$theta_lambda[,,idx, drop = F]
     if(is.null(sig_err_inv)) sig_err_inv <- samples$samples$theta_sig_err_inv[,idx]
@@ -217,14 +217,14 @@ standardize_loadings <- function(emc = NULL, loadings = NULL, sig_err_inv = NULL
 #' @param nice_names Character string. Alternative names to give the parameters
 #' @param ... Optional additional arguments
 #'
-#' @return NULL
-#' @examples \dontrun{
+#' @return No return value, creates a plot of group-level relations
+#' @examples
 #' # For a given set of hierarchical model samples we can make a
 #' # correlation matrix plot.
-#' plot_relations(emc, only_cred = TRUE, plot_cred = TRUE)
+#' plot_relations(samples_LNR, only_cred = TRUE, plot_cred = TRUE)
 #' # We can also only plot the correlations where the credible interval does not include zero
-#' plot_relations(emc, plot_means = TRUE, only_cred = TRUE)
-#' }
+#' plot_relations(samples_LNR, plot_means = TRUE, only_cred = TRUE)
+#'
 #' @export
 #'
 plot_relations <- function(emc = NULL, stage = "sample",  plot_cred = TRUE,
@@ -359,18 +359,18 @@ plot_relations <- function(emc = NULL, stage = "sample",  plot_cred = TRUE,
 #' @param cex Integer. Font size
 #'
 #' @return NULL
-#' @examples \dontrun{
-#' # For a given set of hierarchical factor model samples we can make a factor diagram
-#' make_factor_diagram(emc, only_cred = T)
-#' # We can also specify nice names and adjust the loading positions
-#' make_factor_diagram(emc, nice_names = paste0("V", 1:10), adj = 2)
-#' }
-#'
+# #' @examples \donttest{
+# #' # For a given set of hierarchical factor model samples we can make a factor diagram
+# #' make_factor_diagram(emc, only_cred = T)
+# #' # We can also specify nice names and adjust the loading positions
+# #' make_factor_diagram(emc, nice_names = paste0("V", 1:10), adj = 2)
+# #' }
+
 make_factor_diagram <- function(emc = NULL, stage = "sample",
-                                loadings = NULL, standardize = T,
-                                simple = F, only_cred = F,
+                                loadings = NULL, standardize = TRUE,
+                                simple = FALSE, only_cred = FALSE,
                                 cut = 0, nice_names = NULL,
-                                factor_names = NULL, sort = T,
+                                factor_names = NULL, sort = TRUE,
                                 adj = 1, main = NULL, cex = NULL){
   if(is.null(loadings)){
     if(standardize){

@@ -42,7 +42,7 @@ add_info_standard <- function(sampler, prior = NULL, ...){
 #' `"mu"`, `"sigma2"`, `"covariance"` `"Sigma"`, `"alpha", "correlation"`.
 #'
 #' @return A list with a single entry of type of samples from the prior (if sample = TRUE) or else a prior object
-#' @examples \dontrun{
+#' @examples
 #' # First define a design for the model
 #' design_DDMaE <- design(data = forstmann,model=DDM,
 #'                            formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
@@ -52,8 +52,7 @@ add_info_standard <- function(sampler, prior = NULL, ...){
 #' # We can change values in the default prior or use `prior`
 #' # Then we can get samples from this prior e.g.
 #' samples <- get_prior_standard(prior = prior, design = design_DDMaE,
-#'   sample = TRUE, type = "mu")
-#' }
+#'   sample = TRUE, selection = "mu")
 #' @export
 get_prior_standard <- function(prior = NULL, n_pars = NULL, sample = TRUE, N = 1e5, selection = "mu", design = NULL){
   # Checking and default priors
@@ -310,34 +309,34 @@ get_all_pars_standard <- function(samples, idx, info){
   info$X.given_ind <- 1:(n_params-info$n_randeffect)
   return(list(X = X, mu_tilde = mu_tilde, var_tilde = var_tilde, info = info))
 }
-
-robust_diwish <- function (W, v, S) { #RJI_change: this function is to protect against weird proposals in the diwish function, where sometimes matrices weren't pos def
-  if (!is.matrix(S)) S <- matrix(S)
-  if (!is.matrix(W)) W <- matrix(W)
-  p <- nrow(S)
-  gammapart <- sum(lgamma((v + 1 - 1:p)/2))
-  ldenom <- gammapart + 0.5 * v * p * log(2) + 0.25 * p * (p - 1) * log(pi)
-  if (corpcor::is.positive.definite(W, tol=1e-8)){
-    cholW<-base::chol(W)
-  }else{
-    return(1e-10)
-  }
-  if (corpcor::is.positive.definite(S, tol=1e-8)){
-    cholS <- base::chol(S)
-  }else{
-    return(1e-10)
-  }
-  halflogdetS <- sum(log(diag(cholS)))
-  halflogdetW <- sum(log(diag(cholW)))
-  invW <- chol2inv(cholW)
-  exptrace <- sum(S * invW)
-  lnum <- v * halflogdetS - (v + p + 1) * halflogdetW - 0.5 * exptrace
-  lpdf <- lnum - ldenom
-  out <- exp(lpdf)
-  if(!is.finite(out)) return(1e-100)
-  if(out < 1e-10) return(1e-100)
-  return(exp(lpdf))
-}
+#
+# robust_diwish <- function (W, v, S) { #RJI_change: this function is to protect against weird proposals in the diwish function, where sometimes matrices weren't pos def
+#   if (!is.matrix(S)) S <- matrix(S)
+#   if (!is.matrix(W)) W <- matrix(W)
+#   p <- nrow(S)
+#   gammapart <- sum(lgamma((v + 1 - 1:p)/2))
+#   ldenom <- gammapart + 0.5 * v * p * log(2) + 0.25 * p * (p - 1) * log(pi)
+#   if (corpcor::is.positive.definite(W, tol=1e-8)){
+#     cholW<-base::chol(W)
+#   }else{
+#     return(1e-10)
+#   }
+#   if (corpcor::is.positive.definite(S, tol=1e-8)){
+#     cholS <- base::chol(S)
+#   }else{
+#     return(1e-10)
+#   }
+#   halflogdetS <- sum(log(diag(cholS)))
+#   halflogdetW <- sum(log(diag(cholW)))
+#   invW <- chol2inv(cholW)
+#   exptrace <- sum(S * invW)
+#   lnum <- v * halflogdetS - (v + p + 1) * halflogdetW - 0.5 * exptrace
+#   lpdf <- lnum - ldenom
+#   out <- exp(lpdf)
+#   if(!is.finite(out)) return(1e-100)
+#   if(out < 1e-10) return(1e-100)
+#   return(exp(lpdf))
+# }
 
 unwind_chol <- function(x,reverse=FALSE) {
 

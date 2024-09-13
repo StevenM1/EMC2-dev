@@ -1,6 +1,14 @@
 
 sample_store_factor <- function(data, par_names, iters = 1, stage = "init", integrate = T, is_nuisance, is_grouped, ...) {
   n_factors <- list(...)$n_factors
+  Lambda_mat <- list(...)$Lambda_mat
+  if(is.null(n_factors)){
+    n_factors <- ncol(Lambda_mat)
+  }
+  f_names <- colnames(Lambda_mat)
+  if(is.null(f_names)){
+    f_names <- paste0("F", 1:n_factors)
+  }
   subject_ids <- unique(data$subjects)
   n_subjects <- length(subject_ids)
   base_samples <- sample_store_base(data, par_names[!is_grouped], iters, stage)
@@ -9,8 +17,8 @@ sample_store_factor <- function(data, par_names, iters = 1, stage = "init", inte
   samples <- list(
     theta_mu = array(NA_real_,dim = c(n_pars, iters), dimnames = list(par_names, NULL)),
     theta_var = array(NA_real_,dim = c(n_pars, n_pars, iters),dimnames = list(par_names, par_names, NULL)),
-    theta_lambda = array(NA_real_,dim = c(n_pars, n_factors, iters),dimnames = list(par_names, paste0("F", 1:n_factors), NULL)),
-    lambda_untransf = array(NA_real_,dim = c(n_pars, n_factors, iters),dimnames = list(par_names, paste0("F", 1:n_factors), NULL)),
+    theta_lambda = array(NA_real_,dim = c(n_pars, n_factors, iters),dimnames = list(par_names, f_names, NULL)),
+    lambda_untransf = array(NA_real_,dim = c(n_pars, n_factors, iters),dimnames = list(par_names, f_names, NULL)),
     theta_sig_err_inv = array(NA_real_,dim = c(n_pars, iters),dimnames = list(par_names, NULL)),
     theta_psi_inv = array(NA_real_, dim = c(n_factors, iters), dimnames = list(NULL, NULL)),
     theta_eta = array(NA_real_, dim = c(n_subjects, n_factors, iters), dimnames = list(subject_ids, NULL, NULL))
@@ -25,6 +33,7 @@ add_info_factor <- function(sampler, prior = NULL, ...){
   args <- list(...)
   n_factors <- args$n_factors
   Lambda_mat <- args$Lambda_mat
+  if(is.null(n_factors)) n_factors <- ncol(Lambda_mat)
   n_pars <- sum(!(sampler$nuisance | sampler$grouped))
   if(is.null(Lambda_mat)){
     Lambda_mat <- matrix(Inf, nrow = n_pars, ncol = n_factors)
@@ -74,18 +83,18 @@ add_info_factor <- function(sampler, prior = NULL, ...){
 #' @param Lambda_mat The loadings constraint matrix.
 #'
 #' @return A list with a single entry of type of samples from the prior (if `sample = TRUE`) or else a prior object
-#' @examples \dontrun{
+#' @examples
 #' # First define a design for the model
 #' design_DDMaE <- design(data = forstmann,model=DDM,
 #'                            formula =list(v~0+S,a~E, t0~1, s~1, Z~1, sv~1, SZ~1),
 #'                            constants=c(s=log(1)))
 #' # Now get the default prior
-#' prior <- get_prior_factor(design = design_DDMaE, sample = FALSE)
+#' prior <- get_prior_factor(design = design_DDMaE, sample = FALSE, n_factors = 3)
 #' # We can change values in the default prior or use `prior`
 #' # Then we can get samples from this prior e.g.
 #' samples <- get_prior_factor(prior = prior, design = design_DDMaE,
-#'   sample = TRUE, type = "mu", n_factors = 3)
-#' }
+#'   sample = TRUE, selection = "mu", n_factors = 3)
+#'
 #' @export
 get_prior_factor <- function(prior = NULL, n_pars = NULL, sample = TRUE, N = 1e5, selection = "mu", design = NULL,
                              Lambda_mat = NULL, n_factors = NULL){
@@ -151,7 +160,11 @@ get_prior_factor <- function(prior = NULL, n_pars = NULL, sample = TRUE, N = 1e5
       }
       lambda <- constrain_lambda(lambda, Lambda_mat)
       rownames(lambda) <- par_names
-      colnames(lambda) <- paste0("F", 1:n_factors)
+      if(is.null(colnames(Lambda_mat))){
+        colnames(lambda) <- paste0("F", 1:n_factors)
+      } else{
+        colnames(lambda) <- colnames(Lambda_mat)
+      }
       if(selection %in% "loadings"){
         samples$theta_lambda <- lambda
       }

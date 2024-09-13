@@ -96,6 +96,9 @@ design <- function(formula = NULL,factors = NULL,Rlevels = NULL,model,data=NULL,
 
   if(!is.null(custom_p_vector)){
     design <- list(Flist = formula, model = model, Ffactors = factors)
+    if(!is.null(list(...)$rfun)){
+      attr(design, "rfun") <- list(...)$rfun
+    }
     attr(design, "sampled_p_names") <-custom_p_vector
     attr(design, "custom_ll") <- TRUE
     return(design)
@@ -296,6 +299,11 @@ sampled_p_vector <- function(design,model=NULL,doMap=TRUE, add_da = FALSE, all_c
     names(p_vector) <- attr(design, "p_vector")
     return(p_vector)
   }
+  if(!is.null(attr(design, "custom_ll"))){
+    pars <- numeric(length(attr(design,"sampled_p_names")))
+    names(pars) <- attr(design,"sampled_p_names")
+    return(pars)
+  }
   out <- c()
   map_list <- list()
   for(j in 1:length(design)){
@@ -313,7 +321,7 @@ sampled_p_vector <- function(design,model=NULL,doMap=TRUE, add_da = FALSE, all_c
     #   data <- cbind.data.frame(data,data.frame(lapply(design$Ffunctions,function(f){f(data)})))
 
     if (!is.null(cur_design$Fcovariates)) {
-      covs <- matrix(0,nrow=dim(data)[1],ncol=length(cur_design$Fcovariates),
+      covs <- matrix(1,nrow=dim(data)[1],ncol=length(cur_design$Fcovariates),
                      dimnames=list(NULL,names(cur_design$Fcovariates)))
       data <- cbind.data.frame(data,covs)
     }

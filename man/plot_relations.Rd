@@ -30,16 +30,18 @@ the sampling stage \code{sample}.}
 
 \item{...}{Optional additional arguments}
 }
+\value{
+No return value, creates a plot of group-level relations
+}
 \description{
 An adjusted version of the \code{corrplot} package function \code{corrplot()} tailored
 to \code{EMC2} and the plotting of estimated correlations.
 }
 \examples{
-\dontrun{
 # For a given set of hierarchical model samples we can make a
 # correlation matrix plot.
-plot_relations(emc, only_cred = TRUE, plot_cred = TRUE)
+plot_relations(samples_LNR, only_cred = TRUE, plot_cred = TRUE)
 # We can also only plot the correlations where the credible interval does not include zero
-plot_relations(emc, plot_means = TRUE, only_cred = TRUE)
-}
+plot_relations(samples_LNR, plot_means = TRUE, only_cred = TRUE)
+
 }

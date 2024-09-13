@@ -734,7 +734,6 @@ run_sample <- function(emc, iter = 1000, stop_criteria = NULL,
 #' @param rt_resolution A double. Used for compression, response times will be binned based on this resolution.
 #' @param par_groups A vector. Only to be specified with type `blocked`, e.g., `c(1,1,1,2,2)` means the covariances
 #' of the first three and of the last two parameters are estimated as two separate blocks.
-#' @param n_factors An integer. Only to be specified with type `factor`.
 #' @param prior_list A named list containing the prior. Default prior created if `NULL`. For the default priors, see `?get_prior_{type}`.
 #' @param grouped_pars An integer vector. Parameters on this location of the vector of parameters are treated as constant across subjects
 #' @param ... Additional, optional arguments.
@@ -771,10 +770,10 @@ make_emc <- function(data,design,model=NULL,
                           n_chains=3,compress=TRUE,rt_resolution=0.02,
                           prior_list = NULL,
                           grouped_pars = NULL,
-                          par_groups=NULL,
-                          n_factors=NULL, ...){
+                          par_groups=NULL, ...){
 
   # arguments for future compatibility
+  n_factors <- NULL
   formula <- NULL
   Lambda_mat <- NULL
   B_mat <- NULL
@@ -889,7 +888,6 @@ make_emc <- function(data,design,model=NULL,
     out <- pmwgs(dadm_list,variant_funs, formula = formula, aggr_data = aggr_data,
                  nuisance = nuisance, nuisance_non_hyper = nuisance_non_hyper, grouped_pars = grouped_pars)
   } else if (type == "factor") {
-    if (is.null(n_factors)) stop("Must specify n_factors for factor type")
     out <- pmwgs(dadm_list,variant_funs, n_factors = n_factors, nuisance = nuisance,
                  nuisance_non_hyper = nuisance_non_hyper, grouped_pars = grouped_pars,
                  Lambda_mat = Lambda_mat)
