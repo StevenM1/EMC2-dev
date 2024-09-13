@@ -389,13 +389,12 @@ convolve_regressors_ <- function(events, hrf_model, frame_times, fir_delays=c(0)
 }
 
 
-# Function to create fMRI design matrix from a few basics
-#' Function to create fMRI design matrix from a few basics
-#'
-#' @return
-#' @export
-#'
-#' @examples
+# #' # Function to create fMRI design matrix from a few basicsFunction to create fMRI design matrix from a few basics
+# #'
+# #' @return
+# #' @export
+# #'
+# #' @examples
 make_fmri_design_matrix <- function(frame_times, events=NULL, hrf_model='glover',
                                     drift_model='cosine',
                                     high_pass=0.01,

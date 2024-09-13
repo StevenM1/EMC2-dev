@@ -90,7 +90,6 @@ make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
 #'
 #' @return An emc design matrix that can be used in `make_emc`
 #' @export
-#'
 make_design_fmri <- function(data,
                              events,
                              model = normal_mri,
