@@ -121,25 +121,26 @@ run_emc <- function(emc, stage, stop_criteria,
       particle_factor_in[!progress$gds_bad] <- particle_factor
     }
 
-    nstage <- colSums(chain_n(emc))
+    nstage <- chain_n(emc)[1,]
+    has_ran <- nstage[nstage != 0]
     if(all(nstage == 0)){
       sub_emc <- emc # Very first iterations, no preburn samples yet
     } else if(nstage[stage] == 0){
       # There are no samples in the current stage yet so take the last one from the previous stage
-      has_ran <- nstage[nstage != 0]
       prev_stage <- names(nstage)[sum(nstage != 0)]
-      sub_emc <- subset(emc, filter = chain_n(emc)[1,prev_stage], stage = prev_stage)
+      sub_emc <- subset(emc, filter = chain_n(emc)[1,prev_stage]-1, stage = prev_stage)
     } else{
       sub_emc <- subset(emc, filter = chain_n(emc)[1,stage] - 1, stage = stage)
     }
-    sub_emc <- auto_mclapply(sub_emc,run_stages, stage = stage, iter= max(progress$step_size - 1, 1),
+    sub_emc <- auto_mclapply(sub_emc,run_stages, stage = stage, iter= max(progress$step_size, 1),
                               verbose=verbose,  verboseProgress = verboseProgress,
                               particles=particles,particle_factor=particle_factor_in,
                               p_accept=p_accept_in, n_cores=cores_per_chain, mc.cores = cores_for_chains)
+    class(sub_emc) <- "emc"
     if(stage != 'preburn' & thin_auto){
       sub_emc <- auto_thin(sub_emc, stage = stage)
     }
-    emc <- concat_emc(emc, sub_emc)
+    emc <- concat_emc(emc, sub_emc, remove_first = emc[[1]]$init) # Don't remove the first since we're not adding anything
     rm(sub_emc)
     for(i in 2:length(emc)){ # Frees up memory, courtesy of Steven
       emc[[i]]$data <- emc[[1]]$data

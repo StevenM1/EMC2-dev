@@ -24,13 +24,17 @@ remove_samples <- function(samples, stage = "sample", filter = NULL, thin = 1,
   filter_idx <- which(samples$samples$stage %in% stage)
   max_dim <- max(filter_idx); min_dim <- min(filter_idx)
   if(!is.null(filter)){
-    filter <- min_dim + filter
-    if(length(filter) == 1){
-      if(filter > max_dim) stop("filter larger than available iterations")
-      filter_idx <- filter:max_dim
+    if(filter == max_dim){
+      filter_idx <- 0
     } else{
-      if(length(filter) > max_dim) stop("filter larger than available iterations")
-      filter_idx <- filter
+      filter <- min_dim + filter
+      if(length(filter) == 1){
+        if(filter > max_dim) stop("filter larger than available iterations")
+        filter_idx <- filter:max_dim
+      } else{
+        if(length(filter) > max_dim) stop("filter larger than available iterations")
+        filter_idx <- filter
+      }
     }
   }
   if(!is.null(length.out)){
@@ -51,8 +55,16 @@ remove_samples <- function(samples, stage = "sample", filter = NULL, thin = 1,
   return(samples)
 }
 
-concat_emc <- function(emc1, emc2){
-  out_samples <- emc1
+concat_emc <- function(emc1, emc2, remove_first = FALSE){
+  out_samples <- emc2
+  if(remove_first){
+    nstage <- chain_n(emc2)[1,]
+    if(sum(nstage > 0) == 1){
+      emc2 <- subset(emc2, stage = names(which(nstage > 0)), filter = 1)
+    } else{
+      emc2 <- subset(emc2, names(which(nstage == 1)[1]), length.out = 0, keep_stages = TRUE)
+    }
+  }
   for(i in 1:length(emc1)){
     sampled_objects <- list(emc1[[i]]$samples, emc2[[i]]$samples)
     keys <- unique(unlist(lapply(sampled_objects, names)))
