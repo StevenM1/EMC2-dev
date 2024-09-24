@@ -13,20 +13,27 @@ quick_convolve <- function(regressor, modulator, hkernel, frame_times) {
   return(computed_regressors)
 }
 
-make_contrasts <- function(events, contrasts = NULL, remove_intercept_contr = FALSE, do_print = F){
+make_contrasts <- function(events, contrasts = NULL, remove_intercept_contr = FALSE, do_print = F,
+                           cell_coding = FALSE){
   fname <- events$factor[1]
   colnames(events)[colnames(events) == "event_type"] <- fname
   if(!is.null(contrasts)){
-    events[,fname] <- factor(events[,fname], levels = rownames(contrasts))
+    if(is.matrix(contrasts)){
+      events[,fname] <- factor(events[,fname], levels = rownames(contrasts))
+      stats::contrasts(events[,fname], how.many=ncol(contrasts)) <- contrasts
+    } else{
+      events[,fname] <- factor(events[,fname])
+      stats::contrasts(events[,fname]) <- do.call(contrasts, list(n = length(unique(events[,fname]))))
+    }
   } else{
     events[,fname] <- factor(events[,fname])
   }
-  stats::contrasts(events[,fname]) <- contrasts
-  design <- model.matrix(as.formula(paste0("~ ", fname)), events)
-  if(!is.null(contrasts)){
-    design <- design[,1:(ncol(contrasts)+1)]
+  if(cell_coding){
+    design <- model.matrix(as.formula(paste0("~ 0 + ", fname)), events)
+  } else{
+    design <- model.matrix(as.formula(paste0("~ ", fname)), events)
+    colnames(design)[1] <- paste0(fname, "0")
   }
-  colnames(design)[1] <- paste0(fname, "0")
   if(remove_intercept_contr){
     design <- design[,-1, drop = F]
   }
@@ -43,7 +50,8 @@ make_contrasts <- function(events, contrasts = NULL, remove_intercept_contr = FA
 }
 
 make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
-                                         hrf_model = 'glover + derivative'){
+                                         hrf_model = 'glover + derivative',
+                                         cell_coding = NULL){
   events$duration <- 0.01 # For now this is the default
   if(!is.data.frame(events)) events <- do.call(rbind, events)
   subjects <- unique(timeseries$subjects)
@@ -64,7 +72,8 @@ make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
         ev_run$factor[idx] <- fact
         tmp <- ev_run[idx,]
         ev_tmp <- rbind(ev_tmp, make_contrasts(tmp, contrasts = contrasts[[fact]],
-                                               do_print = (run == runs[1]) & (subject == subjects[1])))
+                                               do_print = (run == runs[1]) & (subject == subjects[1]),
+                                               cell_coding = fact %in% cell_coding))
       }
       ev_tmp <- ev_tmp[order(ev_tmp$onset),]
       dms_sub[[run]] <- make_fmri_design_matrix(ts_run$time,
@@ -86,6 +95,7 @@ make_fmri_design_matrix_wrap <- function(timeseries, events, factors, contrasts,
 #' @param factors A list. The factors used in the events files, e.g. list(E = c('acc', 'spd'))
 #' @param contrasts A list with one entry per contrast
 #' @param hrf_model The type of convolution used. Options, `glover` or `glover + derivative`
+#' @param cell_coding Optional character vector of factors to be estimated as cell/dummy coded.
 #' @param ... Optional additional arguments
 #'
 #' @return An emc design matrix that can be used in `make_emc`
@@ -95,12 +105,14 @@ make_design_fmri <- function(data,
                              events,
                              model = normal_mri,
                              factors,
-                             contrasts,
+                             contrasts = NULL,
                              hrf_model='glover + derivative',
+                             cell_coding = NULL,
                              ...) {
+  if(!is.null(cell_coding) & !cell_coding %in% names(factors)) stop("Cell coded factors must have same name as factors argument")
   dots <- list(...)
   dots$add_intercept <- FALSE
-  design_matrix <- make_fmri_design_matrix_wrap(data, events, factors, contrasts, hrf_model)
+  design_matrix <- make_fmri_design_matrix_wrap(data, events, factors, contrasts, hrf_model, cell_coding)
   data_names <- colnames(data)[!colnames(data) %in% c('subjects', 'run', 'time')]
   # First create the design matrix
 
